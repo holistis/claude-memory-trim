@@ -2,6 +2,11 @@
 // trim-worklog.mjs -- keeps Claude Code session memory lean.
 // Moves oldest entries from hot log to cold archive when line budget exceeded.
 // Only cuts on "## " boundaries. Nothing deleted -- only moved.
+// The archive is written first, atomically (temp file + rename), and the hot
+// log is only trimmed once that write is confirmed on disk. If the archive
+// write fails for any reason (missing directory, no permissions, disk full),
+// the hot log is left untouched and the script exits non-zero instead of
+// silently losing the entries it was about to move.
 // Usage: node trim-worklog.mjs [budget]  (default: 200 lines)
 
 import fs from "node:fs";
@@ -52,12 +57,28 @@ const ci        = cold.findIndex(l => l.startsWith("## "));
 const coldIntro = ci === -1 ? cold : cold.slice(0, ci);
 const coldBody  = ci === -1 ? []   : cold.slice(ci);
 
-fs.writeFileSync(HOT,  trim(hotKeep).join("\n") + "\n");
-fs.writeFileSync(COLD,
-                   trim(coldIntro).join("\n") + "\n\n" +
-                   trim(moved).join("\n") + "\n\n---\n\n" +
-                   coldBody.join("\n")
-                 );
+const newCold = trim(coldIntro).join("\n") + "\n\n" +
+                trim(moved).join("\n") + "\n\n---\n\n" +
+                coldBody.join("\n");
+
+// Archive first, atomically, and only then touch the hot log. Writing HOT
+// before COLD (the previous order) truncated the hot log even when the COLD
+// write failed right after -- e.g. because memory/cold/ did not exist yet,
+// since writeFileSync never creates missing parent directories. That silently
+// dropped the moved entries from both files. mkdir + temp-file + rename closes
+// that window: either the archive lands completely, or HOT is never touched.
+fs.mkdirSync(path.dirname(COLD), { recursive: true });
+const tmpPath = COLD + ".tmp-" + process.pid;
+try {
+    fs.writeFileSync(tmpPath, newCold);
+    fs.renameSync(tmpPath, COLD);
+} catch (err) {
+    try { fs.rmSync(tmpPath, { force: true }); } catch { /* best effort cleanup */ }
+    console.error("[trim-worklog] failed to write cold archive, hot log left untouched: " + err.message);
+    process.exit(1);
+}
+
+fs.writeFileSync(HOT, trim(hotKeep).join("\n") + "\n");
 
 const n = moved.filter(l => l.startsWith("## ")).length;
 console.log("[trim-worklog] moved " + n + " entries to cold. Hot: " + keep + " entries, " + trim(hotKeep).length + " lines.");

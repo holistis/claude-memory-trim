@@ -1,0 +1,14 @@
+{
+  "name": "claude-memory-trim",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Keeps Claude Code session memory lean by rotating logs between hot and cold storage.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node test.mjs"
+  }
+}
