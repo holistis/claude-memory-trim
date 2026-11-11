@@ -128,6 +128,43 @@ test("geeft netjes op als de hot log helemaal niet bestaat", (dir) => {
     assert.equal(coldExists(dir), false);
 });
 
+// --- Custom paths: any two files, anywhere, not this project's own layout. ---
+test("werkt met eigen bestandsnamen via --hot/--cold, niet alleen memory/hot+cold", (dir) => {
+    const hotPath = path.join(dir, "notes/recent.md");
+    const coldPath = path.join(dir, "archive/notes.md");
+    fs.mkdirSync(path.dirname(hotPath), { recursive: true });
+    fs.writeFileSync(hotPath, FIVE_SESSIONS);
+
+    const r = spawnSync(process.execPath, [SCRIPT, "12", `--hot=${hotPath}`, `--cold=${coldPath}`], {
+        cwd: dir,
+        env: { ...process.env, CLAUDE_PROJECT_DIR: dir },
+        encoding: "utf8",
+    });
+    assert.equal(r.status, 0, "script moet slagen: " + r.stderr);
+
+    assert.ok(fs.existsSync(coldPath), "archief moet op het opgegeven pad ontstaan");
+    assert.equal(fs.existsSync(path.join(dir, "memory/cold/work_log.md")), false, "mag het standaardpad niet aanraken");
+
+    const afterHot = countEntries(fs.readFileSync(hotPath, "utf8"));
+    const afterCold = countEntries(fs.readFileSync(coldPath, "utf8"));
+    assert.equal(afterHot + afterCold, 5, "geen enkele sessie mag verdwijnen: " + afterHot + " + " + afterCold + " != 5");
+});
+
+// --- WORKLOG_HOT_PATH / WORKLOG_COLD_PATH env vars work the same as the flags. ---
+test("werkt met WORKLOG_HOT_PATH/WORKLOG_COLD_PATH env-vars", (dir) => {
+    const hotPath = path.join(dir, "log.md");
+    const coldPath = path.join(dir, "log-archive.md");
+    fs.writeFileSync(hotPath, FIVE_SESSIONS);
+
+    const r = spawnSync(process.execPath, [SCRIPT, "12"], {
+        cwd: dir,
+        env: { ...process.env, CLAUDE_PROJECT_DIR: dir, WORKLOG_HOT_PATH: hotPath, WORKLOG_COLD_PATH: coldPath },
+        encoding: "utf8",
+    });
+    assert.equal(r.status, 0, "script moet slagen: " + r.stderr);
+    assert.ok(fs.existsSync(coldPath), "archief moet op het env-pad ontstaan");
+});
+
 console.log("");
 console.log(passed + " passed, " + failed + " failed");
 process.exit(failed > 0 ? 1 : 0);

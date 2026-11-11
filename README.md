@@ -17,9 +17,12 @@ You keep two files:
 ## Usage
 
 ```bash
-node trim-worklog.mjs           # default: 200-line budget
-node trim-worklog.mjs 150       # custom budget
+node trim-worklog.mjs                               # default: 200-line budget, this project's own layout
+node trim-worklog.mjs 150                            # custom budget
+node trim-worklog.mjs 150 --hot=notes/recent.md --cold=archive/notes.md   # any two files, any layout
 ```
+
+`--hot`/`--cold` (or the `WORKLOG_HOT_PATH`/`WORKLOG_COLD_PATH` env vars) point this at any two Markdown files that use `## ` as the entry boundary — you are not required to adopt the `memory/hot` + `memory/cold` folder names below, those are just the default if you pass nothing.
 
 Hook it into Claude Code's session-start script (`.claude/hooks/session-start.sh`) so it runs automatically.
 

@@ -7,16 +7,32 @@
 // write fails for any reason (missing directory, no permissions, disk full),
 // the hot log is left untouched and the script exits non-zero instead of
 // silently losing the entries it was about to move.
-// Usage: node trim-worklog.mjs [budget]  (default: 200 lines)
+// Usage: node trim-worklog.mjs [budget] [--hot=path] [--cold=path]  (default budget: 200 lines)
+// Defaults match this project's own memory/hot + memory/cold layout; pass
+// --hot/--cold (or WORKLOG_HOT_PATH/WORKLOG_COLD_PATH) to point at any other
+// two files that use "## " as the entry boundary.
 
 import fs from "node:fs";
 import path from "node:path";
 
 const ROOT = process.env.CLAUDE_PROJECT_DIR || process.cwd();
-const HOT  = path.join(ROOT, "memory/hot/work_log_recent.md");
-const COLD = path.join(ROOT, "memory/cold/work_log.md");
 
-const MAX_LINES = parseInt(process.argv[2] || process.env.WORKLOG_MAX_LINES || "200", 10);
+// --hot=<path> / --cold=<path> (or WORKLOG_HOT_PATH / WORKLOG_COLD_PATH) let this
+// run against any existing note-taking layout, not just this project's own
+// memory/hot + memory/cold convention. A relative path resolves against ROOT.
+const flags = process.argv.slice(2).filter((a) => a.startsWith("--"));
+const positional = process.argv.slice(2).filter((a) => !a.startsWith("--"));
+const flagValue = (name) => {
+    const hit = flags.find((f) => f.startsWith(`--${name}=`));
+    return hit ? hit.slice(name.length + 3) : undefined;
+};
+
+const hotArg  = flagValue("hot")  || process.env.WORKLOG_HOT_PATH;
+const coldArg = flagValue("cold") || process.env.WORKLOG_COLD_PATH;
+const HOT  = path.resolve(ROOT, hotArg  || "memory/hot/work_log_recent.md");
+const COLD = path.resolve(ROOT, coldArg || "memory/cold/work_log.md");
+
+const MAX_LINES = parseInt(positional[0] || process.env.WORKLOG_MAX_LINES || "200", 10);
 const MIN_KEEP  = 3;
 
 if (!fs.existsSync(HOT)) {
